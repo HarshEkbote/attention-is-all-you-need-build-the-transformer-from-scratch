@@ -153,7 +153,11 @@ import torch
 
 def mask_attention_scores_with_neg_inf(scores, mask):
     """Set entries of scores where mask is False to -inf."""
-    return scores.masked_fill(~mask,float('-inf'))
+    if mask.dim()==2:
+        mask=mask.unsqueeze(1).unsqueeze(2)
+    elif mask.dim()==3:
+        mask=mask.unsqueeze(1)
+    return scores.masked_fill(~mask,float("-inf"))
 
 # Step 20 - softmax_attention_weights
 import torch
@@ -375,19 +379,18 @@ import torch
 
 def decoder_layer_cross_attention_sublayer(y, encoder_output, w_q, w_k, w_v, w_o, gamma, beta, num_heads, src_mask):
     # TODO: run multi-head cross-attention (Q from y, K/V from encoder_output) and wrap with add-and-norm
-    mha=assemble_multi_head_attention_forward(
+    # ── Step 044  decoder_layer_cross_attention_sublayer ──
+    if src_mask is not None and src_mask.dim() == 2:
+        src_mask = src_mask.unsqueeze(1).unsqueeze(2)  # Shape: (B, 1, 1, S)
+        
+    mha = assemble_multi_head_attention_forward(
         y,
-        encoder_output,encoder_output,
-        w_q,w_k,w_v,w_o,
+        encoder_output, encoder_output,
+        w_q, w_k, w_v, w_o,
         num_heads,
         src_mask
     )
-    return apply_residual_add_and_norm(
-        y,
-        mha,
-        gamma,
-        beta
-    )
+    return apply_residual_add_and_norm(y, mha, gamma, beta)
 
 # Step 45 - decoder_layer_feed_forward_sublayer (not yet solved)
 # TODO: implement
