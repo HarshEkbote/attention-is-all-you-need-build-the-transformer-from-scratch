@@ -62,11 +62,8 @@ import torch
 
 def compute_positional_div_term(d_model):
     # TODO: return a 1D FloatTensor of length d_model // 2 holding the sinusoidal frequency divisors
-    size=d_model//2
-    emb=[]
-    for i in range(size):
-        emb.append(10000**((-2*i)/d_model))
-    return torch.FloatTensor(emb)
+    i = torch.arange(0, d_model // 2, dtype=torch.float32)
+    return 10000 ** (2 * i / d_model)
 
 # Step 9 - build_position_index_column
 import torch
@@ -81,7 +78,7 @@ import torch
 
 def fill_even_indices_with_sin(pe, position, div_term):
     """Fill even feature indices of pe with sin(position * div_term)."""
-    pe[:,::2]=torch.sin(position*div_term)
+    pe[:, 0::2] = torch.sin(position / div_term)
     return pe
 
 # Step 11 - fill_odd_indices_with_cos
@@ -373,8 +370,24 @@ def decoder_layer_masked_self_attention_sublayer(y, w_q, w_k, w_v, w_o, gamma, b
         beta
     )
 
-# Step 44 - decoder_layer_cross_attention_sublayer (not yet solved)
-# TODO: implement
+# Step 44 - decoder_layer_cross_attention_sublayer
+import torch
+
+def decoder_layer_cross_attention_sublayer(y, encoder_output, w_q, w_k, w_v, w_o, gamma, beta, num_heads, src_mask):
+    # TODO: run multi-head cross-attention (Q from y, K/V from encoder_output) and wrap with add-and-norm
+    mha=assemble_multi_head_attention_forward(
+        y,
+        encoder_output,encoder_output,
+        w_q,w_k,w_v,w_o,
+        num_heads,
+        src_mask
+    )
+    return apply_residual_add_and_norm(
+        y,
+        mha,
+        gamma,
+        beta
+    )
 
 # Step 45 - decoder_layer_feed_forward_sublayer (not yet solved)
 # TODO: implement
