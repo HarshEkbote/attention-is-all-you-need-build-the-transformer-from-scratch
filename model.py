@@ -85,7 +85,7 @@ def fill_even_indices_with_sin(pe, position, div_term):
 import torch
 
 def fill_odd_indices_with_cos(pe, position, div_term):
-    pe[:,1::2]=torch.cos(position*div_term)
+    pe[:, 1::2] = torch.cos(position / div_term)
     return pe
 
 # Step 12 - build_sinusoidal_positional_encoding
