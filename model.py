@@ -476,54 +476,48 @@ def apply_log_softmax_over_vocab(logits):
 
 # Step 51 - run_transformer_forward
 def run_transformer_forward(src_ids, tgt_ids, model_params, num_heads, pad_id):
-    # TODO: embed src+tgt, add PE, build masks, run encoder/decoder, project to log probs.
     emb = model_params.get("embeddings", model_params)
 
-    src_embedding = emb.get("src_embedding", model_params.get("token_embedding"))
-    tgt_embedding = emb.get("tgt_embedding", src_embedding)
-    output_projection = emb.get("output_projection", model_params.get("output_projection", tgt_embedding))
-
-    if src_embedding is None or tgt_embedding is None or output_projection is None:
-        raise KeyError("Missing src_embedding / tgt_embedding / output_projection in model_params")
-
-    d_model = src_embedding.shape[1]
-
-    src = scale_embeddings_by_sqrt_d_model(src_embedding[src_ids], d_model)
-    tgt = scale_embeddings_by_sqrt_d_model(tgt_embedding[tgt_ids], d_model)
-    max_len=max(src.size(1),tgt.size(1))
-    pe=build_sinusoidal_positional_encoding(max_len,d_model)
-
-    src=add_positional_encoding_to_embeddings(src,pe)
-    tgt=add_positional_encoding_to_embeddings(tgt,pe)
-
-    src_mask=build_padding_mask(src_ids,pad_id)
-    tgt_padding_mask=build_padding_mask(tgt_ids,pad_id)
-    tgt_causal_mask=build_causal_mask(tgt_ids.size(1))
-    tgt_mask=combine_padding_and_causal_masks(
-        tgt_padding_mask,
-        tgt_causal_mask
+    token_embedding = model_params.get(
+        "token_embedding",
+        emb.get("token_embedding", emb.get("src_embedding"))
+    )
+    output_projection = model_params.get(
+        "output_projection",
+        emb.get("output_projection")
     )
 
-    encoder_output=stack_encoder_layers(
-        src,
-        model_params['encoder_layers'],
-        num_heads,
-        src_mask
+    if token_embedding is None or output_projection is None:
+        raise KeyError("Missing token_embedding or output_projection in model_params")
+
+    d_model = token_embedding.shape[1]
+
+    src = token_embedding[src_ids]
+    tgt = token_embedding[tgt_ids]
+
+    src = scale_embeddings_by_sqrt_d_model(src, d_model)
+    tgt = scale_embeddings_by_sqrt_d_model(tgt, d_model)
+
+    max_len = max(src.size(1), tgt.size(1))
+    pe = build_sinusoidal_positional_encoding(max_len, d_model)
+
+    src = add_positional_encoding_to_embeddings(src, pe)
+    tgt = add_positional_encoding_to_embeddings(tgt, pe)
+
+    src_mask = build_padding_mask(src_ids, pad_id)
+    tgt_padding_mask = build_padding_mask(tgt_ids, pad_id)
+    tgt_causal_mask = build_causal_mask(tgt_ids.size(1))
+    tgt_mask = combine_padding_and_causal_masks(tgt_padding_mask, tgt_causal_mask)
+
+    encoder_output = stack_encoder_layers(
+        src, model_params["encoder_layers"], num_heads, src_mask
     )
 
-    decoder_output=stack_decoder_layers(
-        tgt,
-        encoder_output,
-        model_params['decoder_layers'],
-        num_heads,
-        src_mask,
-        tgt_mask
+    decoder_output = stack_decoder_layers(
+        tgt, encoder_output, model_params["decoder_layers"], num_heads, src_mask, tgt_mask
     )
 
-    logits=apply_final_output_projection(
-        decoder_output,
-        model_params['output_projection']
-    )
+    logits = apply_final_output_projection(decoder_output, output_projection)
     return apply_log_softmax_over_vocab(logits)
 
 # Step 52 - init_encoder_layer_parameters
@@ -594,29 +588,28 @@ def init_decoder_layer_parameters(d_model, num_heads, d_ff):
     }
 
 # Step 54 - init_embedding_and_projection_parameters
-import torch.nn.init as init
-
 def init_embedding_and_projection_parameters(vocab_size, d_model, tie_weights=True):
-    """Allocate src/tgt embeddings and output projection (optionally tied)."""
-    # TODO: allocate three (vocab_size, d_model) tensors with requires_grad=True
     def embeddings():
-        w=torch.empty(vocab_size,d_model,dtype=torch.float32)
-        init.normal_(w,mean=0.0,std=0.02)
+        w = torch.empty(vocab_size, d_model, dtype=torch.float32)
+        init.normal_(w, mean=0.0, std=0.02)
         w.requires_grad_()
         return w
 
-    src_emb=embeddings()
-    tgt_emb=embeddings()
+    src_emb = embeddings()
+    tgt_emb = embeddings()
+    token_embedding = src_emb  # shared embedding used by the model
 
     if tie_weights:
-        output_proj=tgt_emb
+        # separate tensor object, same storage as tgt_emb
+        output_proj = tgt_emb.view_as(tgt_emb)
     else:
-        output_proj=embeddings()
+        output_proj = embeddings()
 
     return {
-        "src_embedding":src_emb,
-        "tgt_embedding":tgt_emb,
-        "output_projection":output_proj
+        "src_embedding": src_emb,
+        "tgt_embedding": tgt_emb,
+        "token_embedding": token_embedding,
+        "output_projection": output_proj,
     }
 
 # Step 55 - collect_model_parameters_into_list
