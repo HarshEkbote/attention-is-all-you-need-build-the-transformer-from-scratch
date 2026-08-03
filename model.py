@@ -620,28 +620,27 @@ def init_embedding_and_projection_parameters(vocab_size, d_model, tie_weights=Tr
     }
 
 # Step 55 - collect_model_parameters_into_list
-import torch
-
 def collect_model_parameters_into_list(encoder_layer_params, decoder_layer_params, embedding_params):
-    # TODO: walk the encoder, decoder, and embedding dicts and return a flat deduped list of tensors
-    params=[]
-    seen=set()
+    params = []
+    seen = set()
 
     def add_tensor(tensor):
-        if tensor.requires_grad and id(tensor) not in seen:
-            seen.add(id(tensor))
-            params.append(tensor)
+        if tensor.requires_grad:
+            key = tensor.untyped_storage().data_ptr()
+            if key not in seen:
+                seen.add(key)
+                params.append(tensor)
 
     def process(container):
-        if isinstance(container,dict):
-            iterable=[container]
+        if isinstance(container, dict):
+            iterable = [container]
         else:
-            iterable=container
+            iterable = container
 
         for layer in iterable:
             for tensor in layer.values():
                 add_tensor(tensor)
-    
+
     process(encoder_layer_params)
     process(decoder_layer_params)
     process(embedding_params)
