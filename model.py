@@ -477,15 +477,19 @@ def apply_log_softmax_over_vocab(logits):
 # Step 51 - run_transformer_forward
 def run_transformer_forward(src_ids, tgt_ids, model_params, num_heads, pad_id):
     # TODO: embed src+tgt, add PE, build masks, run encoder/decoder, project to log probs.
-    token_embedding=model_params['token_embedding']
-    d_model=token_embedding.shape[1]
+    emb = model_params.get("embeddings", model_params)
 
-    src=token_embedding[src_ids]
-    tgt=token_embedding[tgt_ids]
+    src_embedding = emb.get("src_embedding", model_params.get("token_embedding"))
+    tgt_embedding = emb.get("tgt_embedding", src_embedding)
+    output_projection = emb.get("output_projection", model_params.get("output_projection", tgt_embedding))
 
-    src=scale_embeddings_by_sqrt_d_model(src,d_model)
-    tgt=scale_embeddings_by_sqrt_d_model(tgt,d_model)
+    if src_embedding is None or tgt_embedding is None or output_projection is None:
+        raise KeyError("Missing src_embedding / tgt_embedding / output_projection in model_params")
 
+    d_model = src_embedding.shape[1]
+
+    src = scale_embeddings_by_sqrt_d_model(src_embedding[src_ids], d_model)
+    tgt = scale_embeddings_by_sqrt_d_model(tgt_embedding[tgt_ids], d_model)
     max_len=max(src.size(1),tgt.size(1))
     pe=build_sinusoidal_positional_encoding(max_len,d_model)
 
@@ -807,8 +811,56 @@ def zero_all_parameter_gradients(parameter_list):
     for param in parameter_list:
         param.grad=None
 
-# Step 71 - compute_batch_training_loss (not yet solved)
-# TODO: implement
+# Step 71 - compute_batch_training_loss
+def compute_batch_training_loss(src_batch, tgt_batch, model_params, config):
+    # TODO: shift targets right, run the forward pass, build smoothed targets, and average the KL loss over non-pad tokens.
+    decoder_input=shift_targets_right_with_start_token(
+        tgt_batch,
+        config["start_id"],
+    )
+
+    #forward
+    logits=run_transformer_forward(
+        src_batch,
+        decoder_input,
+        model_params,
+        config["num_heads"],
+        config["pad_id"],
+    )
+
+    smoothing=config["smoothing"]
+    vocab_size=config["vocab_size"]
+
+    smoothed=build_uniform_smoothing_distribution(
+        logits.shape,
+        vocab_size,
+        smoothing,
+    )
+
+    confidence=1.0-smoothing
+
+    smoothed=set_confidence_on_gold_tokens(
+        smoothed,
+        tgt_batch,
+        confidence,
+    )
+
+    smoothed=zero_pad_column_and_pad_token_rows(
+        smoothed,
+        tgt_batch,
+        config["pad_id"],
+    )
+
+    total_loss=compute_label_smoothed_kl_loss(
+        logits,
+        smoothed,
+    )
+
+    return average_loss_over_non_pad_tokens(
+        total_loss,
+        tgt_batch,
+        config["pad_id"]
+    )
 
 # Step 72 - run_training_step_with_backprop (not yet solved)
 # TODO: implement
