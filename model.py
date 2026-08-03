@@ -916,8 +916,28 @@ def run_training_step_with_backprop(src_batch, tgt_batch, parameter_list, model_
     )
     return float(loss.detach().item())
 
-# Step 73 - run_training_loop_for_steps (not yet solved)
-# TODO: implement
+# Step 73 - run_training_loop_for_steps
+def run_training_loop_for_steps(batches, parameter_list, model_params, optimizer_state, num_steps, config):
+    """Run num_steps training iterations, cycling through batches, and return per-step losses."""
+    # TODO: iterate for num_steps steps, calling run_training_step_with_backprop each time
+    batches=list(batches)
+    if len(batches)==0:
+        return []
+
+    losses=[]
+    for step_number in range(1,num_steps+1):
+        src_batch,tgt_batch=batches[(step_number-1)%len(batches)]
+        loss_value=run_training_step_with_backprop(
+            src_batch,
+            tgt_batch,
+            model_params,
+            parameter_list,
+            optimizer_state,
+            step_number,
+            config,
+        )
+        losses.append(float(loss_value))
+    return losses
 
 # Step 74 - pick_next_token_by_argmax (not yet solved)
 # TODO: implement
