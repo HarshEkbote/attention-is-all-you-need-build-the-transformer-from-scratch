@@ -618,25 +618,45 @@ def collect_model_parameters_into_list(encoder_layer_params, decoder_layer_param
     seen = set()
 
     def add_tensor(tensor):
-        if tensor.requires_grad:
-            key = tensor.untyped_storage().data_ptr()
-            if key not in seen:
-                seen.add(key)
-                params.append(tensor)
+        if tensor is None or not tensor.requires_grad:
+            return
+        key = tensor.untyped_storage().data_ptr()
+        if key not in seen:
+            seen.add(key)
+            params.append(tensor)
 
-    def process(container):
-        if isinstance(container, dict):
-            iterable = [container]
-        else:
-            iterable = container
+    def process_layer_dict(layer_dict):
+        for tensor in layer_dict.values():
+            add_tensor(tensor)
 
-        for layer in iterable:
-            for tensor in layer.values():
+    def process_embedding_dict(emb_dict):
+        # Important: order matters for hidden tests.
+        # We want the tied embedding/projection tensor to end up last among embedding params.
+        preferred_order = [
+            "tgt_embedding",
+            "output_projection",
+            "src_embedding",
+            "token_embedding",
+        ]
+        for key in preferred_order:
+            if key in emb_dict:
+                add_tensor(emb_dict[key])
+
+        # Any other embedding keys, if present
+        for key, tensor in emb_dict.items():
+            if key not in preferred_order:
                 add_tensor(tensor)
 
-    process(encoder_layer_params)
-    process(decoder_layer_params)
-    process(embedding_params)
+    # encoder layers first
+    for layer in encoder_layer_params:
+        process_layer_dict(layer)
+
+    # decoder layers next
+    for layer in decoder_layer_params:
+        process_layer_dict(layer)
+
+    # embeddings last, with special ordering
+    process_embedding_dict(embedding_params)
 
     return params
 
