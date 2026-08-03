@@ -604,7 +604,7 @@ def init_embedding_and_projection_parameters(vocab_size, d_model, tie_weights=Tr
         init.normal_(w,mean=0.0,std=0.02)
         w.requires_grad_()
         return w
-    
+
     src_emb=embeddings()
     tgt_emb=embeddings()
 
@@ -612,7 +612,7 @@ def init_embedding_and_projection_parameters(vocab_size, d_model, tie_weights=Tr
         output_proj=tgt_emb
     else:
         output_proj=embeddings()
-    
+
     return {
         "src_embedding":src_emb,
         "tgt_embedding":tgt_emb,
