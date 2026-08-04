@@ -930,8 +930,8 @@ def run_training_loop_for_steps(batches, parameter_list, model_params, optimizer
         loss_value=run_training_step_with_backprop(
             src_batch,
             tgt_batch,
-            model_params,
             parameter_list,
+            model_params,
             optimizer_state,
             step_number,
             config,
